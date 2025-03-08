@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KSP Clone</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #container { position: relative; }
+        #ui { 
+            position: absolute; 
+            top: 10px; 
+            left: 10px; 
+            color: white; 
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 400px;
+        }
+        .key {
+            display: inline-block;
+            background-color: #444;
+            border: 1px solid #666;
+            border-radius: 3px;
+            padding: 2px 6px;
+            margin: 0 3px;
+            font-family: monospace;
+        }
+        #help-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: 1px solid #666;
+            border-radius: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        #help-modal {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 600px;
+            max-height: 80%;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+            font-size: 20px;
+        }
+        .important {
+            color: #ffcc00;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <div id="ui">
+        <p>Altitude: <span id="altitude">0</span> units</p>
+        <p>Speed: <span id="speed">0</span> units/s</p>
+    </div>
+    <div id="instructions">
+        <h3>Controls:</h3>
+        <p><span class="key">←</span> / <span class="key">→</span> : Rotate rocket</p>
+        <p><span class="key">↑</span> : Apply thrust</p>
+        <p><span class="key">R</span> : Reset game</p>
+        <p><span class="key">+</span> / <span class="key">-</span> : Zoom in/out</p>
+        <p><span class="key">1</span> / <span class="key">2</span> / <span class="key">3</span> : Set speed (1x/5x/100x)</p>
+        <p><span class="important">HOLD UP ARROW</span> to apply continuous thrust!</p>
+        <p><span class="important">Watch your fuel!</span> You have limited fuel.</p>
+        <p><strong>Goal:</strong> Achieve a stable orbit (altitude > 3.0, speed between 0.5-0.9)</p>
+        <p><strong>Tip:</strong> Hold thrust for several seconds to get off the ground, then gradually tilt right.</p>
+    </div>
+    
+    <button id="help-button">Help / Tutorial</button>
+    
+    <div id="help-modal">
+        <span class="close-button">&times;</span>
+        <h2>How to Play</h2>
+        <p>This is a simplified rocket simulation inspired by Kerbal Space Program.</p>
+        
+        <h3>Basic Controls</h3>
+        <ul>
+            <li><strong>Left/Right Arrow:</strong> Rotate the rocket</li>
+            <li><strong>Up Arrow:</strong> Apply thrust (must HOLD for continuous thrust)</li>
+            <li><strong>R Key:</strong> Reset the game (useful after crashes)</li>
+            <li><strong>Mouse Wheel:</strong> Zoom in/out to adjust view</li>
+            <li><strong>+/- Keys:</strong> Alternative zoom controls</li>
+            <li><strong>1/2/3 Keys:</strong> Set simulation speed (1x/5x/100x)</li>
+        </ul>
+        
+        <h3>Simulation Speed</h3>
+        <p>You can adjust how fast time passes in the simulation:</p>
+        <ul>
+            <li><strong>1 Key:</strong> Normal speed (1x) - best for precise maneuvering</li>
+            <li><strong>2 Key:</strong> Fast speed (5x) - good for watching your orbit develop</li>
+            <li><strong>3 Key:</strong> Very fast speed (100x) - useful for long orbits</li>
+            <li>You can also click the speed buttons at the bottom of the screen</li>
+            <li>Higher speeds make it harder to control the rocket precisely</li>
+            <li>The simulation will automatically reset to 1x speed when you restart</li>
+        </ul>
+        
+        <h3>Camera Controls</h3>
+        <p>You can adjust your view of the planet and rocket:</p>
+        <ul>
+            <li>Use the <strong>mouse wheel</strong> to zoom in and out</li>
+            <li>Use the <strong>+</strong> key to zoom in closer to the planet</li>
+            <li>Use the <strong>-</strong> key to zoom out and see more of space</li>
+            <li>Zoom out to see your entire orbit path</li>
+            <li>Zoom in for a closer look at your rocket and the planet</li>
+        </ul>
+        
+        <h3>Orbit Information</h3>
+        <p>When you achieve a stable orbit, the game will display:</p>
+        <ul>
+            <li><strong>Orbit Time:</strong> The time it takes to complete one full orbit</li>
+            <li><strong>Apoapsis:</strong> The highest point in your orbit</li>
+            <li><strong>Periapsis:</strong> The lowest point in your orbit</li>
+            <li>Higher orbits have longer orbit times (following Kepler's Laws)</li>
+            <li>More circular orbits have apoapsis and periapsis values closer together</li>
+            <li>Use faster simulation speeds to see your orbit complete more quickly</li>
+        </ul>
+        
+        <h3>Fuel Management</h3>
+        <p>Your rocket has a limited fuel supply. The fuel gauge at the top of the screen shows your remaining fuel.</p>
+        <ul>
+            <li>Fuel is consumed when you apply thrust (hold the up arrow)</li>
+            <li>Once you run out of fuel, you can no longer apply thrust</li>
+            <li>Plan your ascent carefully to reach orbit before running out of fuel</li>
+            <li>If you run out of fuel before achieving orbit, you'll fall back to Earth</li>
+        </ul>
+        
+        <h3>Getting to Orbit: Step by Step</h3>
+        <ol>
+            <li><strong>Launch vertically:</strong> <span class="important">HOLD</span> the up arrow for several seconds to start your ascent straight up.</li>
+            <li><strong>Reach altitude:</strong> Continue until you reach about 3.0-4.0 units of altitude.</li>
+            <li><strong>Gravity turn:</strong> Gradually tilt your rocket to the right (using right arrow) while maintaining thrust.</li>
+            <li><strong>Build orbital velocity:</strong> Continue thrusting horizontally until your speed is between 0.5-0.9 units/s.</li>
+            <li><strong>Stable orbit:</strong> When you achieve the right balance of altitude and speed, you'll be in a stable orbit!</li>
+            <li><strong>Speed up time:</strong> Once in orbit, press 2 or 3 to speed up time and watch your orbit.</li>
+        </ol>
+        
+        <h3>Physics Tips</h3>
+        <ul>
+            <li>The atmosphere extends to 3 units above the Earth's surface, causing drag that slows you down.</li>
+            <li>If your speed is too high (>0.9), you'll escape Earth's gravity on an escape trajectory.</li>
+            <li>If your speed is too low, you'll eventually fall back to Earth.</li>
+            <li>Gravity decreases with distance (inverse square law), so it's easier to maintain orbit at higher altitudes.</li>
+            <li>Fuel efficiency is crucial - don't waste fuel by thrusting in the wrong direction.</li>
+            <li>Orbit time is calculated using Kepler's Third Law of planetary motion.</li>
+        </ul>
+        
+        <h3>Troubleshooting</h3>
+        <ul>
+            <li><strong>Rocket won't lift off:</strong> Make sure you're <span class="important">HOLDING</span> the up arrow, not just tapping it.</li>
+            <li><strong>Rocket bouncing on surface:</strong> Hold thrust longer to build up enough speed to escape.</li>
+            <li><strong>Can't achieve orbit:</strong> Try going higher before turning, then build horizontal speed gradually.</li>
+            <li><strong>Out of fuel:</strong> You need to be more efficient with your fuel usage. Try a more optimal trajectory.</li>
+            <li><strong>Crashed:</strong> Press the R key or click the Reset button to start over.</li>
+            <li><strong>Game running too fast:</strong> Press 1 to return to normal speed (1x).</li>
+        </ul>
+    </div>
+    
+    <script>
+        // Help modal functionality
+        document.getElementById('help-button').addEventListener('click', function() {
+            document.getElementById('help-modal').style.display = 'block';
+        });
+        
+        document.querySelector('.close-button').addEventListener('click', function() {
+            document.getElementById('help-modal').style.display = 'none';
+        });
+        
+        // Add keyboard shortcut for reset (R key)
+        window.addEventListener('keydown', function(event) {
+            if (event.code === 'KeyR') {
+                // Trigger reset if the reset function exists
+                if (typeof resetGame === 'function') {
+                    resetGame();
+                }
+            }
+        });
+    </script>
+    
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html> 
