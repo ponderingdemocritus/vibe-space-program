@@ -13,26 +13,20 @@ function loadTextures() {
 
   // Earth textures
   const earthTextures = {
-    map: textureLoader.load(
-      "assets/earth_texture.jpg",
-      undefined,
-      undefined,
-      () => console.error("Error loading Earth texture map")
+    map: textureLoader.load("/earth_texture.jpg", undefined, undefined, () =>
+      console.error("Error loading Earth texture map")
     ),
-    bumpMap: textureLoader.load(
-      "assets/earth_bump.jpg",
-      undefined,
-      undefined,
-      () => console.error("Error loading Earth bump map")
+    bumpMap: textureLoader.load("/earth_bump.jpg", undefined, undefined, () =>
+      console.error("Error loading Earth bump map")
     ),
     specularMap: textureLoader.load(
-      "assets/earth_specular.jpg",
+      "/earth_specular.jpg",
       undefined,
       undefined,
       () => console.error("Error loading Earth specular map")
     ),
     cloudsMap: textureLoader.load(
-      "assets/earth_clouds.png",
+      "/earth_clouds.png",
       undefined,
       undefined,
       () => console.error("Error loading Earth clouds map")
@@ -41,17 +35,11 @@ function loadTextures() {
 
   // Moon textures
   const moonTextures = {
-    map: textureLoader.load(
-      "assets/moon_texture.jpg",
-      undefined,
-      undefined,
-      () => console.error("Error loading Moon texture map")
+    map: textureLoader.load("/moon_texture.jpg", undefined, undefined, () =>
+      console.error("Error loading Moon texture map")
     ),
-    bumpMap: textureLoader.load(
-      "assets/moon_bump.jpg",
-      undefined,
-      undefined,
-      () => console.error("Error loading Moon bump map")
+    bumpMap: textureLoader.load("/moon_bump.jpg", undefined, undefined, () =>
+      console.error("Error loading Moon bump map")
     ),
   };
 

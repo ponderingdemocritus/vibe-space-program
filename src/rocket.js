@@ -52,12 +52,12 @@ export class Rocket {
     // Reset position and orientation
     if (primaryBody) {
       // Position just above the primary body (Earth)
-      const startPosition = new THREE.Vector3(0, primaryBody.radius + 0.05, 0);
+      const startPosition = new THREE.Vector3(0, primaryBody.radius + 0.1, 0);
       startPosition.add(primaryBody.position); // Add the body's position
       this.mesh.position.copy(startPosition);
     } else {
       // Fallback to default position
-      this.mesh.position.set(0, this.earthRadius + 0.05, 0); // Just above Earth surface
+      this.mesh.position.set(0, this.earthRadius + 0.1, 0); // Just above Earth surface
     }
 
     this.mesh.rotation.z = 0; // Reset rotation
@@ -117,10 +117,10 @@ export class Rocket {
     this.hasStarted = false;
     this.hasCrashed = false;
     this.crashCount = 0;
-    this.crashVelocityThreshold = 0.5;
+    this.crashVelocityThreshold = 0.5; // Not used anymore since any collision causes a crash
     this.lastCollisionTime = 0;
-    this.collisionCooldown = 0.5;
-    this.maxCrashCount = 3; // Number of consecutive collisions before declaring a crash
+    this.collisionCooldown = 0.1; // Reduced from 0.5 to make collision detection more responsive
+    this.maxCrashCount = 1; // Reduced from 3 to 1 since any collision should cause a crash
 
     // Feedback flags
     this.orbitFeedbackTriggered = false;
@@ -268,6 +268,11 @@ export class Rocket {
       // Start the simulation when thrust is first applied
       if (!this.hasStarted) {
         this.hasStarted = true;
+
+        // Add a small upward impulse to help with takeoff
+        // This prevents the rocket from getting stuck on the surface
+        const upwardImpulse = this.thrustDirection.clone().multiplyScalar(0.05);
+        this.velocity.add(upwardImpulse);
       }
     } else {
       // No thrust if no fuel or thrust not requested
@@ -470,70 +475,17 @@ export class Rocket {
         if (this.celestialBodies && this.celestialBodies.length > 0) {
           for (const body of this.celestialBodies) {
             if (body.checkCollision(this.position, 0.1)) {
-              // 0.1 is approximate rocket size
               collisionDetected = true;
 
               // Reset collision timer
               this.lastCollisionTime = 0;
 
-              // Check if this is a crash (high velocity impact or multiple collisions)
+              // Get impact velocity
               const impactVelocity = this.velocity.length();
-              if (impactVelocity > this.crashVelocityThreshold) {
-                this.crashCount++;
 
-                // If we've had multiple high-velocity impacts, consider it a crash
-                if (this.crashCount >= this.maxCrashCount) {
-                  this.hasCrashed = true;
-
-                  // Create a custom event for the crash
-                  const crashEvent = new CustomEvent("rocketCrash");
-                  window.dispatchEvent(crashEvent);
-
-                  // Trigger crash effect if not already triggered
-                  if (!this.crashEffectTriggered) {
-                    window.dispatchEvent(new CustomEvent("rocketCrashEffect"));
-                    this.crashEffectTriggered = true;
-                  }
-
-                  return;
-                }
-              }
-
-              // Bounce off the surface with reduced velocity
-              // Use a coefficient of restitution (0.7) for more realistic bounces
-              const normal = new THREE.Vector3()
-                .copy(this.position)
-                .sub(body.position)
-                .normalize();
-              const reflection = this.velocity.clone().reflect(normal);
-
-              // Apply coefficient of restitution (0.7) for more realistic bounces
-              const restitution = 0.7;
-              this.velocity.copy(reflection).multiplyScalar(restitution);
-
-              // Move slightly away from the surface to prevent getting stuck
-              this.position.copy(
-                normal.multiplyScalar(body.radius + 0.1).add(body.position)
-              );
-
-              break; // Only handle one collision per frame
-            }
-          }
-        } else {
-          // Fallback to original Earth-only collision detection
-          if (this.position.length() < this.earthRadius) {
-            collisionDetected = true;
-
-            // Reset collision timer
-            this.lastCollisionTime = 0;
-
-            // Check if this is a crash (high velocity impact or multiple collisions)
-            const impactVelocity = this.velocity.length();
-            if (impactVelocity > this.crashVelocityThreshold) {
-              this.crashCount++;
-
-              // If we've had multiple high-velocity impacts, consider it a crash
-              if (this.crashCount >= this.maxCrashCount) {
+              // Only crash if the rocket is moving at a significant speed
+              // AND the simulation has started (thrust has been applied)
+              if (impactVelocity > 0.3 && this.hasStarted) {
                 this.hasCrashed = true;
 
                 // Create a custom event for the crash
@@ -547,19 +499,82 @@ export class Rocket {
                 }
 
                 return;
+              } else {
+                // For low-velocity collisions or before simulation starts,
+                // just stop the rocket - this allows it to sit on the surface
+
+                // Calculate normal vector (direction from body center to rocket)
+                const normal = new THREE.Vector3()
+                  .copy(this.position)
+                  .sub(body.position)
+                  .normalize();
+
+                // Move slightly away from the surface to prevent getting stuck
+                this.position.copy(
+                  normal.multiplyScalar(body.radius + 0.1).add(body.position)
+                );
+
+                // Zero out velocity in the normal direction (stop falling)
+                const normalVelocity = normal
+                  .clone()
+                  .multiplyScalar(this.velocity.dot(normal));
+                this.velocity.sub(normalVelocity);
+
+                // Add a small damping to horizontal velocity to simulate friction
+                this.velocity.multiplyScalar(0.95);
               }
+
+              break; // Only handle one collision per frame
             }
+          }
+        } else {
+          // Fallback to original Earth-only collision detection
+          if (this.position.length() < this.earthRadius) {
+            collisionDetected = true;
 
-            // Bounce off the surface with reduced velocity
-            const normal = new THREE.Vector3().copy(this.position).normalize();
-            const reflection = this.velocity.clone().reflect(normal);
+            // Reset collision timer
+            this.lastCollisionTime = 0;
 
-            // Apply coefficient of restitution (0.7) for more realistic bounces
-            const restitution = 0.7;
-            this.velocity.copy(reflection).multiplyScalar(restitution);
+            // Get impact velocity
+            const impactVelocity = this.velocity.length();
 
-            // Move slightly away from the surface to prevent getting stuck
-            this.position.copy(normal.multiplyScalar(this.earthRadius + 0.1));
+            // Only crash if the rocket is moving at a significant speed
+            // AND the simulation has started (thrust has been applied)
+            if (impactVelocity > 0.3 && this.hasStarted) {
+              this.hasCrashed = true;
+
+              // Create a custom event for the crash
+              const crashEvent = new CustomEvent("rocketCrash");
+              window.dispatchEvent(crashEvent);
+
+              // Trigger crash effect if not already triggered
+              if (!this.crashEffectTriggered) {
+                window.dispatchEvent(new CustomEvent("rocketCrashEffect"));
+                this.crashEffectTriggered = true;
+              }
+
+              return;
+            } else {
+              // For low-velocity collisions or before simulation starts,
+              // just stop the rocket - this allows it to sit on the surface
+
+              // Calculate normal vector (direction from Earth center to rocket)
+              const normal = new THREE.Vector3()
+                .copy(this.position)
+                .normalize();
+
+              // Move slightly away from the surface to prevent getting stuck
+              this.position.copy(normal.multiplyScalar(this.earthRadius + 0.1));
+
+              // Zero out velocity in the normal direction (stop falling)
+              const normalVelocity = normal
+                .clone()
+                .multiplyScalar(this.velocity.dot(normal));
+              this.velocity.sub(normalVelocity);
+
+              // Add a small damping to horizontal velocity to simulate friction
+              this.velocity.multiplyScalar(0.95);
+            }
           }
         }
 
@@ -676,9 +691,12 @@ export class Rocket {
       isInOrbit: this.isInOrbit,
       orbitPeriod: this.orbitPeriod,
       hasCrashed: this.hasCrashed,
+      hasStarted: this.hasStarted,
       altitude: this.position.length() - this.earthRadius,
       thrustDirection: this.thrustDirection.toArray(),
       thrustMagnitude: this.thrustMagnitude,
+      lastCollisionTime: this.lastCollisionTime,
+      collisionCooldown: this.collisionCooldown,
     };
   }
 }

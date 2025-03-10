@@ -272,32 +272,68 @@ function createCrashOverlay() {
   const overlay = document.createElement("div");
   overlay.id = "crash-overlay";
   overlay.style.position = "absolute";
-  overlay.style.top = "50%";
-  overlay.style.left = "50%";
-  overlay.style.transform = "translate(-50%, -50%)";
-  overlay.style.backgroundColor = "rgba(255, 0, 0, 0.3)";
+  overlay.style.top = "0";
+  overlay.style.left = "0";
+  overlay.style.width = "100%";
+  overlay.style.height = "100%";
+  overlay.style.backgroundColor = "rgba(255, 0, 0, 0.2)";
+  overlay.style.backdropFilter = "blur(5px)";
   overlay.style.color = "white";
-  overlay.style.padding = "20px";
-  overlay.style.borderRadius = "10px";
+  overlay.style.display = "flex";
+  overlay.style.flexDirection = "column";
+  overlay.style.justifyContent = "center";
+  overlay.style.alignItems = "center";
   overlay.style.textAlign = "center";
   overlay.style.display = "none"; // Initially hidden
   overlay.style.zIndex = "1000";
 
-  const message = document.createElement("h2");
+  const message = document.createElement("h1");
   message.textContent = "CRASH!";
+  message.style.fontSize = "48px";
+  message.style.color = "red";
+  message.style.textShadow = "0 0 10px rgba(255, 255, 255, 0.8)";
+  message.style.marginBottom = "20px";
+  message.style.fontFamily = "Arial, sans-serif";
+  message.style.animation = "pulse 1.5s infinite";
+
+  // Add CSS animation for pulsing effect
+  const style = document.createElement("style");
+  style.textContent = `
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+  `;
+  document.head.appendChild(style);
 
   const subMessage = document.createElement("p");
-  subMessage.textContent =
-    "Your rocket has crashed. Click the Reset button to try again.";
+  subMessage.textContent = "Your rocket has crashed into a celestial body.";
+  subMessage.style.fontSize = "24px";
+  subMessage.style.marginBottom = "10px";
+  subMessage.style.fontFamily = "Arial, sans-serif";
+
+  const resetMessage = document.createElement("p");
+  resetMessage.innerHTML =
+    "Press <strong>R</strong> to reset or <strong>C</strong> to recover.";
+  resetMessage.style.fontSize = "20px";
+  resetMessage.style.marginTop = "20px";
+  resetMessage.style.fontFamily = "Arial, sans-serif";
 
   overlay.appendChild(message);
   overlay.appendChild(subMessage);
+  overlay.appendChild(resetMessage);
 
   document.body.appendChild(overlay);
   return overlay;
 }
 
 const crashOverlay = createCrashOverlay();
+
+// Add event listener for rocket crash
+window.addEventListener("rocketCrash", () => {
+  crashOverlay.style.display = "flex";
+});
 
 // Create out of fuel overlay
 function createOutOfFuelOverlay() {
@@ -379,13 +415,6 @@ function resetGame() {
 
 // Make resetGame available globally for the R key shortcut
 window.resetGame = resetGame;
-
-// Listen for rocket crash events
-window.addEventListener("rocketCrash", () => {
-  console.log("Rocket crashed!");
-  resetButton.style.display = "block";
-  crashOverlay.style.display = "block";
-});
 
 // Create clock for timing
 const clock = new THREE.Clock();
@@ -763,6 +792,8 @@ function updateDebugOverlay() {
     rocket.maxFuel
   } (${debugInfo.fuelPercentage.toFixed(1)}%)\n`;
   content += `In Orbit: ${debugInfo.isInOrbit ? "YES" : "NO"}\n`;
+  content += `Simulation Started: ${debugInfo.hasStarted ? "YES" : "NO"}\n`;
+  content += `Last Collision: ${debugInfo.lastCollisionTime.toFixed(2)}s ago\n`;
 
   if (debugInfo.isInOrbit) {
     content += `Orbit Period: ${debugInfo.orbitPeriod.toFixed(1)}s\n`;
@@ -885,21 +916,26 @@ function createOrbitAchievedFeedback() {
 function createCrashEffectFeedback() {
   // Add event listener for crash effect
   window.addEventListener("rocketCrashEffect", () => {
-    // Create explosion effect
-    const explosion = document.createElement("div");
-    explosion.style.position = "absolute";
-    explosion.style.top = "50%";
-    explosion.style.left = "50%";
-    explosion.style.transform = "translate(-50%, -50%)";
-    explosion.style.width = "100px";
-    explosion.style.height = "100px";
-    explosion.style.borderRadius = "50%";
-    explosion.style.backgroundColor = "orange";
-    explosion.style.boxShadow = "0 0 50px 20px rgba(255, 165, 0, 0.8)";
-    explosion.style.zIndex = "1000";
-    explosion.style.pointerEvents = "none";
+    // Create multiple explosion particles for a more dramatic effect
+    createExplosionParticles();
 
-    document.body.appendChild(explosion);
+    // Create text overlay
+    const crashText = document.createElement("div");
+    crashText.style.position = "absolute";
+    crashText.style.top = "40%";
+    crashText.style.left = "50%";
+    crashText.style.transform = "translate(-50%, -50%)";
+    crashText.style.color = "red";
+    crashText.style.fontFamily = "Arial, sans-serif";
+    crashText.style.fontSize = "36px";
+    crashText.style.fontWeight = "bold";
+    crashText.style.textShadow = "0 0 10px rgba(255, 0, 0, 0.8)";
+    crashText.style.zIndex = "1001";
+    crashText.style.opacity = "1";
+    crashText.style.pointerEvents = "none";
+    crashText.textContent = "CRASH!";
+
+    document.body.appendChild(crashText);
 
     // Play a crash sound
     const audio = new Audio();
@@ -907,26 +943,126 @@ function createCrashEffectFeedback() {
       "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
     audio.play().catch((e) => console.log("Audio play failed:", e));
 
-    // Animate the explosion
+    // Animate the text
+    let textOpacity = 1;
+    const animateText = () => {
+      textOpacity -= 0.01;
+      crashText.style.opacity = textOpacity;
+
+      if (textOpacity > 0) {
+        requestAnimationFrame(animateText);
+      } else {
+        document.body.removeChild(crashText);
+      }
+    };
+
+    // Start text animation after a short delay
+    setTimeout(animateText, 1000);
+  });
+
+  // Function to create multiple explosion particles
+  function createExplosionParticles() {
+    const numParticles = 15; // Number of explosion particles
+    const particles = [];
+
+    // Create main explosion
+    const mainExplosion = document.createElement("div");
+    mainExplosion.style.position = "absolute";
+    mainExplosion.style.top = "50%";
+    mainExplosion.style.left = "50%";
+    mainExplosion.style.transform = "translate(-50%, -50%)";
+    mainExplosion.style.width = "100px";
+    mainExplosion.style.height = "100px";
+    mainExplosion.style.borderRadius = "50%";
+    mainExplosion.style.backgroundColor = "orange";
+    mainExplosion.style.boxShadow = "0 0 50px 20px rgba(255, 165, 0, 0.8)";
+    mainExplosion.style.zIndex = "1000";
+    mainExplosion.style.pointerEvents = "none";
+
+    document.body.appendChild(mainExplosion);
+    particles.push(mainExplosion);
+
+    // Create smaller explosion particles
+    for (let i = 0; i < numParticles; i++) {
+      const particle = document.createElement("div");
+      particle.style.position = "absolute";
+      particle.style.top = "50%";
+      particle.style.left = "50%";
+      particle.style.transform = "translate(-50%, -50%)";
+      particle.style.width = "20px";
+      particle.style.height = "20px";
+      particle.style.borderRadius = "50%";
+
+      // Randomize colors between red, orange, and yellow
+      const colors = ["red", "orange", "yellow"];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      particle.style.backgroundColor = color;
+
+      particle.style.boxShadow = `0 0 20px 5px rgba(255, 165, 0, 0.6)`;
+      particle.style.zIndex = "999";
+      particle.style.pointerEvents = "none";
+
+      // Random direction for particle movement
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2 + Math.random() * 5;
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed;
+
+      // Store velocity with the particle
+      particle.vx = vx;
+      particle.vy = vy;
+
+      document.body.appendChild(particle);
+      particles.push(particle);
+    }
+
+    // Animate all particles
     let size = 100;
     let opacity = 1;
+
     const animate = () => {
       size += 5;
-      opacity -= 0.02;
+      opacity -= 0.01;
 
-      explosion.style.width = `${size}px`;
-      explosion.style.height = `${size}px`;
-      explosion.style.opacity = opacity;
+      // Update main explosion
+      mainExplosion.style.width = `${size}px`;
+      mainExplosion.style.height = `${size}px`;
+      mainExplosion.style.opacity = opacity;
+
+      // Update smaller particles
+      for (let i = 1; i < particles.length; i++) {
+        const particle = particles[i];
+
+        // Move particle
+        const currentLeft = parseFloat(particle.style.left) || 50;
+        const currentTop = parseFloat(particle.style.top) || 50;
+
+        particle.style.left = `${currentLeft + particle.vx * 0.1}%`;
+        particle.style.top = `${currentTop + particle.vy * 0.1}%`;
+
+        // Shrink and fade particle
+        const currentSize = parseFloat(particle.style.width) || 20;
+        const newSize = Math.max(0, currentSize - 0.2);
+
+        particle.style.width = `${newSize}px`;
+        particle.style.height = `${newSize}px`;
+        particle.style.opacity = opacity;
+      }
 
       if (opacity > 0) {
         requestAnimationFrame(animate);
       } else {
-        document.body.removeChild(explosion);
+        // Remove all particles
+        particles.forEach((p) => {
+          if (p.parentNode) {
+            p.parentNode.removeChild(p);
+          }
+        });
       }
     };
 
     animate();
-  });
+  }
 }
 
 // Create help overlay
