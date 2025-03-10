@@ -1,14 +1,23 @@
 import * as THREE from "three";
 
 export class Rocket {
-  constructor() {
+  constructor(celestialBodies = []) {
+    this.celestialBodies = celestialBodies;
     this.initializeRocket();
   }
 
   // Initialize or reset the rocket
   initializeRocket() {
-    // Earth radius is now 2 instead of 1
-    const earthRadius = 2;
+    // Get the primary body (Earth) from the celestial bodies array
+    const primaryBody =
+      this.celestialBodies && this.celestialBodies.length > 0
+        ? this.celestialBodies[0]
+        : null;
+
+    // Set default values if no primary body
+    this.earthRadius = primaryBody ? primaryBody.radius : 2;
+    this.earthMass = 3; // Game-appropriate Earth mass (was using real Earth mass)
+    this.G = 0.3; // Game gravitational constant (was using real G constant)
 
     // Create rocket mesh (simple cylinder) if it doesn't exist
     if (!this.mesh) {
@@ -40,8 +49,17 @@ export class Rocket {
       this.trail = new THREE.Line(trailGeometry, trailMaterial);
     }
 
-    // Reset position and orientation - adjusted for new Earth radius
-    this.mesh.position.set(0, earthRadius + 0.05, 0); // Just above Earth surface
+    // Reset position and orientation
+    if (primaryBody) {
+      // Position just above the primary body (Earth)
+      const startPosition = new THREE.Vector3(0, primaryBody.radius + 0.05, 0);
+      startPosition.add(primaryBody.position); // Add the body's position
+      this.mesh.position.copy(startPosition);
+    } else {
+      // Fallback to default position
+      this.mesh.position.set(0, this.earthRadius + 0.05, 0); // Just above Earth surface
+    }
+
     this.mesh.rotation.z = 0; // Reset rotation
 
     // Reset physics properties
@@ -49,13 +67,20 @@ export class Rocket {
     this.position = this.mesh.position;
     this.velocity = new THREE.Vector3(0, 0, 0);
     this.force = new THREE.Vector3(0, 0, 0);
-    this.thrustDirection = new THREE.Vector3(0, 1, 0);
-    this.thrustMagnitude = 0;
 
-    // Earth properties
-    this.earthRadius = earthRadius;
-    this.earthMass = 1; // Arbitrary mass for Earth
-    this.G = 0.4; // Gravitational constant
+    // Set thrust direction to point away from the primary body
+    if (primaryBody) {
+      // Calculate direction from primary body to rocket
+      this.thrustDirection = new THREE.Vector3()
+        .copy(this.position)
+        .sub(primaryBody.position)
+        .normalize();
+    } else {
+      // Default thrust direction (up)
+      this.thrustDirection = new THREE.Vector3(0, 1, 0);
+    }
+
+    this.thrustMagnitude = 0;
 
     // Orbit properties
     this.isInOrbit = false;
@@ -69,14 +94,19 @@ export class Rocket {
     this.fuelConsumptionRate = 7; // Units per second at full thrust
     this.outOfFuel = false;
 
-    // Reset trail
-    this.trailPoints = [];
+    // Reset trail using a fixed-size circular buffer
     this.trailMaxPoints = 100;
+    this.trailPoints = new Array(this.trailMaxPoints).fill(null);
+    this.trailIndex = 0;
+    this.trailCount = 0;
     this.trailUpdateInterval = 0.1;
     this.trailTimer = 0;
+
+    // Initialize trail geometry with empty positions
+    const positions = new Float32Array(this.trailMaxPoints * 3);
     this.trail.geometry.setAttribute(
       "position",
-      new THREE.BufferAttribute(new Float32Array(0), 3)
+      new THREE.BufferAttribute(positions, 3)
     );
 
     // Atmosphere parameters
@@ -86,53 +116,134 @@ export class Rocket {
     // Reset simulation state
     this.hasStarted = false;
     this.hasCrashed = false;
-
-    // Collision handling
+    this.crashCount = 0;
+    this.crashVelocityThreshold = 0.5;
     this.lastCollisionTime = 0;
     this.collisionCooldown = 0.5;
-    this.crashVelocityThreshold = 0.3; // Velocity threshold for considering a crash
-    this.crashCount = 0; // Count consecutive collisions
     this.maxCrashCount = 3; // Number of consecutive collisions before declaring a crash
+
+    // Feedback flags
+    this.orbitFeedbackTriggered = false;
+    this.crashEffectTriggered = false;
   }
 
   applyGravity() {
     // Only apply gravity if the simulation has started
     if (!this.hasStarted || this.hasCrashed) return;
 
-    const G = this.G; // Gravitational constant
-    const M_earth = this.earthMass;
-    const r = this.position.length();
-    const directionToEarth = new THREE.Vector3()
-      .copy(this.position)
-      .negate()
-      .normalize();
-    const gravityMagnitude = (G * M_earth * this.mass) / (r * r);
-    this.force.add(directionToEarth.multiplyScalar(gravityMagnitude));
+    // Apply gravity from each celestial body, but only consider nearby bodies
+    if (this.celestialBodies && this.celestialBodies.length > 0) {
+      for (const body of this.celestialBodies) {
+        // Calculate distance to the body
+        const distanceVector = new THREE.Vector3()
+          .copy(this.position)
+          .sub(body.position);
+        const distance = distanceVector.length();
+
+        // Only consider bodies that are close enough to have significant gravity
+        // (typically within 10x the body's radius)
+        if (distance < body.radius * 20) {
+          // Calculate gravity force from this body
+          const gravityForce = body.calculateGravityForce(
+            this.position,
+            this.mass
+          );
+
+          // Add the force to the rocket
+          this.force.add(gravityForce);
+        }
+      }
+    } else {
+      // Fallback to original Earth-only gravity calculation
+      const G = this.G; // Gravitational constant
+      const M_earth = this.earthMass;
+      const r = this.position.length();
+
+      // Add stronger gravity near the surface to make liftoff more challenging
+      let gravityMultiplier = 1.0;
+      const altitude = r - this.earthRadius;
+      if (altitude < 1.0) {
+        // Increase gravity strength near the surface
+        gravityMultiplier = 1.0 + (1.0 - altitude) * 0.5;
+      }
+
+      const directionToEarth = new THREE.Vector3()
+        .copy(this.position)
+        .negate()
+        .normalize();
+      const gravityMagnitude =
+        ((G * M_earth * this.mass) / (r * r)) * gravityMultiplier;
+      this.force.add(directionToEarth.multiplyScalar(gravityMagnitude));
+    }
   }
 
   applyDrag() {
     // Only apply drag if the simulation has started
     if (!this.hasStarted || this.hasCrashed) return;
 
-    // Calculate altitude (distance from Earth's center minus Earth radius)
-    const altitude = this.position.length() - this.earthRadius;
+    // Apply drag from celestial bodies with atmospheres
+    if (this.celestialBodies && this.celestialBodies.length > 0) {
+      for (const body of this.celestialBodies) {
+        // Skip bodies without atmospheres
+        if (!body.hasAtmosphere) continue;
 
-    // Only apply drag if within atmosphere
-    if (altitude < this.atmosphereHeight) {
-      // Drag decreases with altitude (linear falloff)
-      const atmosphereDensity = 1 - altitude / this.atmosphereHeight;
+        // Calculate distance from body center
+        const distanceVector = new THREE.Vector3()
+          .copy(this.position)
+          .sub(body.position);
+        const distance = distanceVector.length();
 
-      // Drag is proportional to velocity squared and in opposite direction
-      const dragMagnitude =
-        this.dragCoefficient * atmosphereDensity * this.velocity.lengthSq();
+        // Calculate altitude above body surface
+        const altitude = distance - body.radius;
 
-      if (this.velocity.lengthSq() > 0.0001) {
-        // Avoid normalizing zero vector
-        const dragForce = this.velocity
-          .clone()
-          .normalize()
-          .multiplyScalar(-dragMagnitude);
-        this.force.add(dragForce);
+        // Only apply drag if within atmosphere (default atmosphere height is 3.0)
+        const atmosphereHeight = 3.0;
+        if (altitude < atmosphereHeight) {
+          // Use exponential decay model for more realistic atmospheric density
+          // Density decreases exponentially with altitude
+          const scaleHeight = atmosphereHeight / 3; // Scale height is typically 1/3 of atmosphere height
+          const atmosphereDensity = Math.exp(-altitude / scaleHeight);
+
+          // Drag is proportional to velocity squared and in opposite direction
+          const dragMagnitude =
+            this.dragCoefficient * atmosphereDensity * this.velocity.lengthSq();
+
+          if (this.velocity.lengthSq() > 0.0001) {
+            // Avoid normalizing zero vector
+            const dragForce = this.velocity
+              .clone()
+              .normalize()
+              .multiplyScalar(-dragMagnitude);
+            this.force.add(dragForce);
+          }
+
+          // Only apply drag from one body (the closest one with atmosphere)
+          break;
+        }
+      }
+    } else {
+      // Fallback to original Earth-only drag calculation
+      // Calculate altitude (distance from Earth's center minus Earth radius)
+      const altitude = this.position.length() - this.earthRadius;
+
+      // Only apply drag if within atmosphere
+      if (altitude < this.atmosphereHeight) {
+        // Use exponential decay model for more realistic atmospheric density
+        const scaleHeight = this.atmosphereHeight / 3;
+        const atmosphereDensity = Math.exp(-altitude / scaleHeight);
+
+        // Drag is proportional to velocity squared and in opposite direction
+        const dragMagnitude =
+          this.dragCoefficient * atmosphereDensity * this.velocity.lengthSq();
+
+        if (this.velocity.lengthSq() > 0.0001) {
+          // Avoid normalizing zero vector
+          const dragForce = this.velocity
+            .clone()
+            .normalize()
+            .multiplyScalar(-dragMagnitude);
+          this.force.add(dragForce);
+        }
       }
     }
   }
@@ -181,29 +292,31 @@ export class Rocket {
   }
 
   updateTrail(deltaTime) {
-    // Only update trail if the simulation has started
     if (!this.hasStarted || this.hasCrashed) return;
 
     this.trailTimer += deltaTime;
-
     if (this.trailTimer >= this.trailUpdateInterval) {
       this.trailTimer = 0;
 
       // Add current position to trail
-      this.trailPoints.push(this.position.clone());
-
-      // Limit trail length
-      if (this.trailPoints.length > this.trailMaxPoints) {
-        this.trailPoints.shift();
-      }
+      this.trailPoints[this.trailIndex] = this.position.clone();
+      this.trailIndex = (this.trailIndex + 1) % this.trailMaxPoints;
+      this.trailCount = Math.min(this.trailCount + 1, this.trailMaxPoints);
 
       // Update trail geometry
-      const positions = new Float32Array(this.trailPoints.length * 3);
+      const positions = new Float32Array(this.trailMaxPoints * 3);
 
-      for (let i = 0; i < this.trailPoints.length; i++) {
-        positions[i * 3] = this.trailPoints[i].x;
-        positions[i * 3 + 1] = this.trailPoints[i].y;
-        positions[i * 3 + 2] = this.trailPoints[i].z;
+      for (let i = 0; i < this.trailCount; i++) {
+        const pointIndex =
+          (this.trailIndex - this.trailCount + i + this.trailMaxPoints) %
+          this.trailMaxPoints;
+        const point = this.trailPoints[pointIndex];
+
+        if (point) {
+          positions[i * 3] = point.x;
+          positions[i * 3 + 1] = point.y;
+          positions[i * 3 + 2] = point.z;
+        }
       }
 
       this.trail.geometry.setAttribute(
@@ -216,36 +329,97 @@ export class Rocket {
 
   // Calculate the orbital period using Kepler's Third Law
   calculateOrbitPeriod() {
-    // Only calculate if we have sufficient velocity and altitude
-    const altitude = this.position.length() - this.earthRadius;
+    // Find the closest celestial body
+    let closestBody = null;
+    let minDistance = Infinity;
+
+    if (this.celestialBodies && this.celestialBodies.length > 0) {
+      for (const body of this.celestialBodies) {
+        const distanceVector = new THREE.Vector3()
+          .copy(this.position)
+          .sub(body.position);
+        const distance = distanceVector.length();
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestBody = body;
+        }
+      }
+    }
+
+    // If no closest body found, use default Earth values
+    if (!closestBody) {
+      closestBody = {
+        name: "Earth",
+        radius: this.earthRadius,
+        mass: this.earthMass,
+        position: new THREE.Vector3(0, 0, 0),
+      };
+    }
+
+    // Calculate altitude from the closest body
+    const altitude = minDistance - closestBody.radius;
     const speed = this.velocity.length();
 
+    // Calculate orbital parameters
+    const G = this.G;
+    const M =
+      closestBody.name === "Earth" ? 3 : closestBody.name === "Moon" ? 0.5 : 1;
+
+    // Calculate escape velocity at current altitude
+    const escapeVelocity = Math.sqrt((2 * G * M) / minDistance);
+
+    // Calculate circular orbit velocity at current altitude
+    const circularOrbitVelocity = Math.sqrt((G * M) / minDistance);
+
+    // Adjust orbit detection parameters based on the body
+    const minAltitude = closestBody.name === "Earth" ? 2.0 : 1.0; // Lower minimum altitude
+    const minSpeed = circularOrbitVelocity * 0.8; // 80% of circular orbit velocity
+    const maxSpeed = escapeVelocity * 0.9; // 90% of escape velocity
+
     // Check if we're in a stable orbit
-    if (altitude > 3.0 && speed > 0.5 && speed < 0.9) {
-      this.isInOrbit = true;
+    // 1. Altitude must be above minimum
+    // 2. Speed must be between min and max (not too slow to fall, not too fast to escape)
+    // 3. Velocity must be mostly perpendicular to position vector (orbital motion)
+    if (altitude > minAltitude && speed > minSpeed && speed < maxSpeed) {
+      // Calculate the angle between velocity and position vectors
+      const positionNorm = new THREE.Vector3()
+        .copy(this.position)
+        .sub(closestBody.position)
+        .normalize();
+      const velocityNorm = new THREE.Vector3().copy(this.velocity).normalize();
+      const dotProduct = positionNorm.dot(velocityNorm);
 
-      // Calculate semi-major axis (approximated as distance from Earth center)
-      const semiMajorAxis = this.position.length();
+      // Dot product close to 0 means vectors are perpendicular (good orbital motion)
+      // Allow some deviation (±0.5) from perfect perpendicular
+      if (Math.abs(dotProduct) < 0.5) {
+        this.isInOrbit = true;
 
-      // Kepler's Third Law: T² = (4π²/GM) * a³
-      // Where T is the orbital period, G is the gravitational constant,
-      // M is the mass of the central body, and a is the semi-major axis
-      const orbitalPeriod =
-        2 *
-        Math.PI *
-        Math.sqrt(Math.pow(semiMajorAxis, 3) / (this.G * this.earthMass));
+        // Calculate semi-major axis (approximated as distance from body's center)
+        const semiMajorAxis = minDistance;
 
-      // Store orbit properties
-      this.orbitPeriod = orbitalPeriod;
-      this.orbitDistance = semiMajorAxis;
-      this.orbitSpeed = speed;
+        // Kepler's Third Law: T² = (4π²/GM) * a³
+        const orbitalPeriod = Math.sqrt(
+          ((4 * Math.PI * Math.PI) / (G * M)) * Math.pow(semiMajorAxis, 3)
+        );
 
-      return orbitalPeriod;
-    } else {
-      this.isInOrbit = false;
-      this.orbitPeriod = 0;
-      return 0;
+        this.orbitPeriod = orbitalPeriod;
+
+        // Trigger orbit feedback if not already triggered
+        if (!this.orbitFeedbackTriggered) {
+          window.dispatchEvent(new CustomEvent("orbitAchieved"));
+          this.orbitFeedbackTriggered = true;
+        }
+
+        return orbitalPeriod;
+      }
     }
+
+    // Not in orbit
+    this.isInOrbit = false;
+    this.orbitPeriod = 0;
+    this.orbitFeedbackTriggered = false;
+    return 0;
   }
 
   // Format the orbit time in minutes:seconds
@@ -277,64 +451,138 @@ export class Rocket {
       this.velocity.add(acceleration.multiplyScalar(deltaTime));
       this.position.add(this.velocity.clone().multiplyScalar(deltaTime));
 
+      // Prevent NaN or Infinity in position or velocity
+      if (
+        !isFinite(this.position.length()) ||
+        !isFinite(this.velocity.length())
+      ) {
+        console.warn("Invalid physics state detected, resetting velocity.");
+        this.velocity.set(0, 0, 0);
+      }
+
       // Update collision cooldown
       this.lastCollisionTime += deltaTime;
 
-      // Check for collision with Earth, but only if cooldown has elapsed
-      if (
-        this.position.length() < this.earthRadius &&
-        this.lastCollisionTime > this.collisionCooldown
-      ) {
-        // Earth radius is now 2
-        // Reset collision timer
-        this.lastCollisionTime = 0;
+      // Check for collision with any celestial body, but only if cooldown has elapsed
+      if (this.lastCollisionTime > this.collisionCooldown) {
+        let collisionDetected = false;
 
-        // Check if this is a crash (high velocity impact or multiple collisions)
-        const impactVelocity = this.velocity.length();
-        if (impactVelocity > this.crashVelocityThreshold) {
-          this.crashCount++;
+        if (this.celestialBodies && this.celestialBodies.length > 0) {
+          for (const body of this.celestialBodies) {
+            if (body.checkCollision(this.position, 0.1)) {
+              // 0.1 is approximate rocket size
+              collisionDetected = true;
 
-          // If we've had multiple high-velocity impacts, consider it a crash
-          if (this.crashCount >= this.maxCrashCount) {
-            this.hasCrashed = true;
-            // Create a custom event for the crash
-            const crashEvent = new CustomEvent("rocketCrash");
-            window.dispatchEvent(crashEvent);
-            return;
+              // Reset collision timer
+              this.lastCollisionTime = 0;
+
+              // Check if this is a crash (high velocity impact or multiple collisions)
+              const impactVelocity = this.velocity.length();
+              if (impactVelocity > this.crashVelocityThreshold) {
+                this.crashCount++;
+
+                // If we've had multiple high-velocity impacts, consider it a crash
+                if (this.crashCount >= this.maxCrashCount) {
+                  this.hasCrashed = true;
+
+                  // Create a custom event for the crash
+                  const crashEvent = new CustomEvent("rocketCrash");
+                  window.dispatchEvent(crashEvent);
+
+                  // Trigger crash effect if not already triggered
+                  if (!this.crashEffectTriggered) {
+                    window.dispatchEvent(new CustomEvent("rocketCrashEffect"));
+                    this.crashEffectTriggered = true;
+                  }
+
+                  return;
+                }
+              }
+
+              // Bounce off the surface with reduced velocity
+              // Use a coefficient of restitution (0.7) for more realistic bounces
+              const normal = new THREE.Vector3()
+                .copy(this.position)
+                .sub(body.position)
+                .normalize();
+              const reflection = this.velocity.clone().reflect(normal);
+
+              // Apply coefficient of restitution (0.7) for more realistic bounces
+              const restitution = 0.7;
+              this.velocity.copy(reflection).multiplyScalar(restitution);
+
+              // Move slightly away from the surface to prevent getting stuck
+              this.position.copy(
+                normal.multiplyScalar(body.radius + 0.1).add(body.position)
+              );
+
+              break; // Only handle one collision per frame
+            }
           }
         } else {
-          // Reset crash count if this was a gentle collision
+          // Fallback to original Earth-only collision detection
+          if (this.position.length() < this.earthRadius) {
+            collisionDetected = true;
+
+            // Reset collision timer
+            this.lastCollisionTime = 0;
+
+            // Check if this is a crash (high velocity impact or multiple collisions)
+            const impactVelocity = this.velocity.length();
+            if (impactVelocity > this.crashVelocityThreshold) {
+              this.crashCount++;
+
+              // If we've had multiple high-velocity impacts, consider it a crash
+              if (this.crashCount >= this.maxCrashCount) {
+                this.hasCrashed = true;
+
+                // Create a custom event for the crash
+                const crashEvent = new CustomEvent("rocketCrash");
+                window.dispatchEvent(crashEvent);
+
+                // Trigger crash effect if not already triggered
+                if (!this.crashEffectTriggered) {
+                  window.dispatchEvent(new CustomEvent("rocketCrashEffect"));
+                  this.crashEffectTriggered = true;
+                }
+
+                return;
+              }
+            }
+
+            // Bounce off the surface with reduced velocity
+            const normal = new THREE.Vector3().copy(this.position).normalize();
+            const reflection = this.velocity.clone().reflect(normal);
+
+            // Apply coefficient of restitution (0.7) for more realistic bounces
+            const restitution = 0.7;
+            this.velocity.copy(reflection).multiplyScalar(restitution);
+
+            // Move slightly away from the surface to prevent getting stuck
+            this.position.copy(normal.multiplyScalar(this.earthRadius + 0.1));
+          }
+        }
+
+        // Reset crash count if no collision
+        if (!collisionDetected) {
           this.crashCount = 0;
         }
-
-        // Place rocket just above Earth surface in the same direction
-        this.position.normalize().multiplyScalar(this.earthRadius + 0.05);
-
-        // Dampen velocity to prevent excessive bouncing
-        this.velocity.multiplyScalar(0.2);
-
-        // Add a small upward impulse to help escape the surface
-        if (this.thrustMagnitude > 0 && !this.outOfFuel) {
-          const upwardImpulse = this.thrustDirection
-            .clone()
-            .multiplyScalar(0.1);
-          this.velocity.add(upwardImpulse);
-        }
       }
 
-      // Calculate orbit period if we're moving
-      if (this.velocity.lengthSq() > 0.01) {
-        this.calculateOrbitPeriod();
-      }
+      // Update the rocket's position and rotation
+      this.mesh.position.copy(this.position);
+
+      // Update the trail
+      this.updateTrail(deltaTime);
+
+      // Calculate orbit parameters
+      this.calculateOrbitPeriod();
     }
 
-    // Update mesh orientation (always allow rotation)
+    // Update mesh orientation (always allow rotation even if not started)
     const angle =
       Math.atan2(this.thrustDirection.y, this.thrustDirection.x) - Math.PI / 2;
     this.mesh.rotation.z = angle;
-
-    // Update trail
-    this.updateTrail(deltaTime);
   }
 
   setThrustMagnitude(mag) {
@@ -349,7 +597,15 @@ export class Rocket {
   rotate(angle) {
     // Don't allow rotation if crashed
     if (this.hasCrashed) return;
+
+    // Apply rotation to thrust direction
     this.thrustDirection.applyAxisAngle(new THREE.Vector3(0, 0, 1), angle);
+
+    // Normalize to prevent any potential floating-point errors
+    this.thrustDirection.normalize();
+
+    // Debug log to verify rotation is being called
+    console.log("Rotating rocket, new direction:", this.thrustDirection);
   }
 
   // Method to add trail to scene
@@ -385,5 +641,44 @@ export class Rocket {
   // Get orbit period in seconds
   getOrbitPeriod() {
     return this.orbitPeriod;
+  }
+
+  // Method to refill fuel
+  refillFuel(amount = this.maxFuel) {
+    this.fuel = Math.min(this.maxFuel, this.fuel + amount);
+    this.outOfFuel = this.fuel <= 0;
+    return this.fuel;
+  }
+
+  // Method to recover from a crash
+  recoverFromCrash() {
+    this.hasCrashed = false;
+    this.crashCount = 0;
+    this.crashEffectTriggered = false;
+    this.velocity.set(0, 0, 0); // Reset motion
+
+    // Refill fuel
+    this.refillFuel();
+
+    return true;
+  }
+
+  // Method to get debug info
+  getDebugInfo() {
+    return {
+      position: this.position.toArray(),
+      velocity: this.velocity.toArray(),
+      speed: this.velocity.length(),
+      force: this.force.toArray(),
+      fuel: this.fuel,
+      fuelPercentage: this.getFuelPercentage(),
+      isOutOfFuel: this.outOfFuel,
+      isInOrbit: this.isInOrbit,
+      orbitPeriod: this.orbitPeriod,
+      hasCrashed: this.hasCrashed,
+      altitude: this.position.length() - this.earthRadius,
+      thrustDirection: this.thrustDirection.toArray(),
+      thrustMagnitude: this.thrustMagnitude,
+    };
   }
 }

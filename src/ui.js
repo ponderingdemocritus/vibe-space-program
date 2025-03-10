@@ -6,7 +6,8 @@ export function updateUI(
   isOutOfFuel = false,
   isInOrbit = false,
   orbitTime = "N/A",
-  simulationSpeed = 1
+  simulationSpeed = 1,
+  closestBody = "Earth"
 ) {
   document.getElementById("altitude").textContent = altitude.toFixed(2);
   document.getElementById("speed").textContent = speed.toFixed(2);
@@ -16,6 +17,7 @@ export function updateUI(
   const fuelGauge = document.getElementById("fuel-gauge");
   const orbitTimeElement = document.getElementById("orbit-time");
   const simSpeedElement = document.getElementById("sim-speed");
+  const closestBodyElement = document.getElementById("closest-body");
 
   if (!orbitStatus) {
     const uiElement = document.getElementById("ui");
@@ -25,6 +27,12 @@ export function updateUI(
     simSpeedContainer.innerHTML =
       'Simulation Speed: <span id="sim-speed">1x</span>';
     uiElement.appendChild(simSpeedContainer);
+
+    // Add closest body indicator
+    const closestBodyContainer = document.createElement("p");
+    closestBodyContainer.innerHTML =
+      'Closest Body: <span id="closest-body">Earth</span>';
+    uiElement.appendChild(closestBodyContainer);
 
     // Add fuel gauge
     const fuelElement = document.createElement("div");
@@ -61,8 +69,8 @@ export function updateUI(
     orbitInfoElement.style.display = "none";
     orbitInfoElement.innerHTML = `
       <p>Orbit Parameters:</p>
-      <p>Apoapsis: <span id=\"apoapsis\">0</span> units</p>
-      <p>Periapsis: <span id=\"periapsis\">0</span> units</p>
+      <p>Apoapsis: <span id="apoapsis">0</span> units</p>
+      <p>Periapsis: <span id="periapsis">0</span> units</p>
     `;
     uiElement.appendChild(orbitInfoElement);
 
@@ -73,14 +81,13 @@ export function updateUI(
     debugElement.style.opacity = "0.7";
     debugElement.style.marginTop = "10px";
     debugElement.innerHTML = `
-      <p>Gravity: Reduced to make liftoff easier</p>
+      <p>Gravity: Increased for more realistic liftoff challenge</p>
       <p>Drag: Minimal to help achieve orbit</p>
       <p>Speed Controls: Press 1, 2, or 3 to change simulation speed</p>
     `;
     uiElement.appendChild(debugElement);
   } else {
     // Update simulation speed
-    const simSpeedElement = document.getElementById("sim-speed");
     if (simSpeedElement) {
       simSpeedElement.textContent = `${simulationSpeed}x`;
 
@@ -146,6 +153,11 @@ export function updateUI(
       } else {
         orbitTimeContainer.style.display = "none";
       }
+    }
+
+    // Update closest body
+    if (closestBodyElement) {
+      closestBodyElement.textContent = closestBody;
     }
 
     // Determine orbit status based on altitude and speed

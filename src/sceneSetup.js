@@ -1,35 +1,115 @@
 import * as THREE from "three";
 import { Rocket } from "./rocket.js";
+import { CelestialBody } from "./celestialBody.js";
+
+// Function to load textures
+function loadTextures() {
+  const textureLoader = new THREE.TextureLoader();
+
+  // Add error handling
+  textureLoader.onError = function (url) {
+    console.error("Error loading texture:", url);
+  };
+
+  // Earth textures
+  const earthTextures = {
+    map: textureLoader.load(
+      "assets/earth_texture.jpg",
+      undefined,
+      undefined,
+      () => console.error("Error loading Earth texture map")
+    ),
+    bumpMap: textureLoader.load(
+      "assets/earth_bump.jpg",
+      undefined,
+      undefined,
+      () => console.error("Error loading Earth bump map")
+    ),
+    specularMap: textureLoader.load(
+      "assets/earth_specular.jpg",
+      undefined,
+      undefined,
+      () => console.error("Error loading Earth specular map")
+    ),
+    cloudsMap: textureLoader.load(
+      "assets/earth_clouds.png",
+      undefined,
+      undefined,
+      () => console.error("Error loading Earth clouds map")
+    ),
+  };
+
+  // Moon textures
+  const moonTextures = {
+    map: textureLoader.load(
+      "assets/moon_texture.jpg",
+      undefined,
+      undefined,
+      () => console.error("Error loading Moon texture map")
+    ),
+    bumpMap: textureLoader.load(
+      "assets/moon_bump.jpg",
+      undefined,
+      undefined,
+      () => console.error("Error loading Moon bump map")
+    ),
+  };
+
+  return { earthTextures, moonTextures };
+}
 
 export function createScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000); // Black background for space
 
-  // Earth - increased size from 1 to 2
-  const earthRadius = 2;
-  const earthGeometry = new THREE.SphereGeometry(earthRadius, 64, 64); // Increased detail
-  const earthMaterial = new THREE.MeshStandardMaterial({
-    color: 0x0077ff,
-    roughness: 0.7,
-    metalness: 0.1,
-  });
-  const earth = new THREE.Mesh(earthGeometry, earthMaterial);
-  scene.add(earth);
+  // Load textures
+  const { earthTextures, moonTextures } = loadTextures();
 
-  // Add simple atmosphere glow
-  const atmosphereGeometry = new THREE.SphereGeometry(
-    earthRadius * 1.025,
-    64,
-    64
-  );
-  const atmosphereMaterial = new THREE.MeshBasicMaterial({
-    color: 0x4ca6ff,
-    transparent: true,
-    opacity: 0.2,
-    side: THREE.BackSide,
+  // Create celestial bodies
+  const celestialBodies = [];
+
+  // Earth
+  const earth = new CelestialBody({
+    name: "Earth",
+    radius: 2,
+    mass: 5.972e24, // Earth's mass in kg
+    color: 0x0077ff, // Fallback color if texture fails to load
+    hasAtmosphere: true,
+    atmosphereColor: 0x4ca6ff,
+    position: new THREE.Vector3(0, 0, 0),
+    textureMap: earthTextures.map,
+    bumpMap: earthTextures.bumpMap,
+    specularMap: earthTextures.specularMap,
+    cloudsMap: earthTextures.cloudsMap,
+    rotationSpeed: 0.05, // Earth rotation speed
+    cloudsRotationSpeed: 0.07, // Clouds rotate faster than the Earth
+    tilt: 23.5, // Earth's axial tilt in degrees
   });
-  const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
-  scene.add(atmosphere);
+  earth.addToScene(scene);
+  celestialBodies.push(earth);
+
+  // Moon
+  const moon = new CelestialBody({
+    name: "Moon",
+    radius: 0.5, // Moon is about 1/4 the size of Earth
+    mass: 7.342e22, // Moon's mass in kg
+    color: 0xcccccc, // Fallback color if texture fails to load
+    hasAtmosphere: false, // Moon has no atmosphere
+    position: new THREE.Vector3(5, 0, 0), // Initial position
+    textureMap: moonTextures.map,
+    bumpMap: moonTextures.bumpMap,
+    rotationSpeed: 0.01, // Moon rotation speed (slower than Earth)
+    isOrbiting: true, // Make the moon orbit
+    orbitTarget: earth, // Orbit around Earth
+    orbitRadius: 5.0, // Orbit radius
+    orbitSpeed: 0.1, // Orbit speed (radians per second)
+    orbitAngle: 0, // Initial orbit angle
+    orbitClockwise: false, // Counter-clockwise orbit (like most moons)
+    showOrbitPath: true, // Show the orbit path
+    orbitPathColor: 0x888888, // Light gray orbit path
+  });
+  moon.addToScene(scene);
+  celestialBodies.push(moon);
 
   // Add stars (simple particles)
   const starsGeometry = new THREE.BufferGeometry();
@@ -60,7 +140,7 @@ export function createScene() {
   scene.add(stars);
 
   // Rocket
-  const rocket = new Rocket();
+  const rocket = new Rocket(celestialBodies);
   scene.add(rocket.mesh);
   rocket.addTrailToScene(scene);
 
@@ -73,5 +153,5 @@ export function createScene() {
   light.position.set(5, 3, 5);
   scene.add(light);
 
-  return { scene, rocket, earthRadius };
+  return { scene, rocket, celestialBodies };
 }

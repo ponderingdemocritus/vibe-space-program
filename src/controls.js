@@ -16,12 +16,14 @@ window.addEventListener("keyup", (event) => {
 
 export function updateControls(rocket, deltaTime) {
   const rotationSpeed = 1.5; // Radians per second (reduced for more precise control)
-  const thrustPower = 0.3; // Significantly increased from 0.15 to 0.3 for guaranteed liftoff
+  const thrustPower = 0.6; // Increased to 0.6 to compensate for stronger gravity
 
   if (keys["ArrowLeft"]) {
+    console.log("Left arrow pressed, rotating clockwise");
     rocket.rotate(rotationSpeed * deltaTime);
   }
   if (keys["ArrowRight"]) {
+    console.log("Right arrow pressed, rotating counter-clockwise");
     rocket.rotate(-rotationSpeed * deltaTime);
   }
 

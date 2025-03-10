@@ -16,9 +16,54 @@
             padding: 10px;
             border-radius: 5px;
         }
+        #stats-panel {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 5px 20px;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 50;
+        }
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 80px;
+        }
+        .stat-label {
+            font-size: 10px;
+            opacity: 0.8;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+        }
+        .stat-value {
+            font-weight: bold;
+        }
+        .fuel-bar {
+            width: 100px;
+            height: 8px;
+            background-color: #333;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+        .fuel-level {
+            height: 100%;
+            background-color: #00ff00;
+            width: 100%;
+            transition: width 0.3s, background-color 0.3s;
+        }
         #instructions {
             position: absolute;
-            bottom: 10px;
+            bottom: 50px;
             left: 10px;
             color: white;
             background-color: rgba(0, 0, 0, 0.5);
@@ -80,6 +125,8 @@
         <p>Altitude: <span id="altitude">0</span> units</p>
         <p>Speed: <span id="speed">0</span> units/s</p>
     </div>
+    
+
     <div id="instructions">
         <h3>Controls:</h3>
         <p><span class="key">←</span> / <span class="key">→</span> : Rotate rocket</p>
@@ -90,7 +137,7 @@
         <p><span class="important">HOLD UP ARROW</span> to apply continuous thrust!</p>
         <p><span class="important">Watch your fuel!</span> You have limited fuel.</p>
         <p><strong>Goal:</strong> Achieve a stable orbit (altitude > 3.0, speed between 0.5-0.9)</p>
-        <p><strong>Tip:</strong> Hold thrust for several seconds to get off the ground, then gradually tilt right.</p>
+        <p><strong>Challenge:</strong> Earth's gravity is strong - you'll need a good strategy to reach orbit!</p>
     </div>
     
     <button id="help-button">Help / Tutorial</button>
@@ -163,6 +210,8 @@
         
         <h3>Physics Tips</h3>
         <ul>
+            <li><strong>Strong Gravity:</strong> Earth's gravity is quite strong, especially near the surface.</li>
+            <li>You'll need to maintain thrust longer to escape the planet's pull.</li>
             <li>The atmosphere extends to 3 units above the Earth's surface, causing drag that slows you down.</li>
             <li>If your speed is too high (>0.9), you'll escape Earth's gravity on an escape trajectory.</li>
             <li>If your speed is too low, you'll eventually fall back to Earth.</li>
@@ -173,6 +222,7 @@
         
         <h3>Troubleshooting</h3>
         <ul>
+            <li><strong>Can't escape gravity:</strong> Make sure to thrust continuously straight up until you reach a good altitude.</li>
             <li><strong>Rocket won't lift off:</strong> Make sure you're <span class="important">HOLDING</span> the up arrow, not just tapping it.</li>
             <li><strong>Rocket bouncing on surface:</strong> Hold thrust longer to build up enough speed to escape.</li>
             <li><strong>Can't achieve orbit:</strong> Try going higher before turning, then build horizontal speed gradually.</li>
