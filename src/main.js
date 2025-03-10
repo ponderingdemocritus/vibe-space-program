@@ -182,11 +182,63 @@ function createZoomIndicator() {
   indicator.style.padding = "5px 10px";
   indicator.style.borderRadius = "5px";
   indicator.style.fontSize = "12px";
-  indicator.innerHTML = `
-    <p>Zoom Controls:</p>
-    <p>Mouse Wheel or +/- Keys</p>
-    <p>Zoom Level: <span id="zoom-level">6.0</span>x</p>
+
+  // Create zoom level display
+  const zoomLevelDisplay = document.createElement("div");
+  zoomLevelDisplay.style.marginBottom = "5px";
+  zoomLevelDisplay.innerHTML = `Zoom Level: <span id="zoom-level">6.0</span>x`;
+  indicator.appendChild(zoomLevelDisplay);
+
+  // Create zoom scale
+  const zoomScale = document.createElement("div");
+  zoomScale.style.width = "100px";
+  zoomScale.style.height = "10px";
+  zoomScale.style.backgroundColor = "#333";
+  zoomScale.style.borderRadius = "5px";
+  zoomScale.style.position = "relative";
+  zoomScale.style.marginTop = "5px";
+
+  // Create zoom indicator marker
+  const zoomMarker = document.createElement("div");
+  zoomMarker.id = "zoom-marker";
+  zoomMarker.style.width = "5px";
+  zoomMarker.style.height = "14px";
+  zoomMarker.style.backgroundColor = "#fff";
+  zoomMarker.style.borderRadius = "2px";
+  zoomMarker.style.position = "absolute";
+  zoomMarker.style.top = "-2px";
+  zoomMarker.style.left = "0";
+  zoomMarker.style.transform = "translateX(-50%)";
+  zoomScale.appendChild(zoomMarker);
+
+  // Add min and max labels
+  const minLabel = document.createElement("span");
+  minLabel.style.position = "absolute";
+  minLabel.style.left = "0";
+  minLabel.style.top = "12px";
+  minLabel.style.fontSize = "10px";
+  minLabel.textContent = minZoom;
+  zoomScale.appendChild(minLabel);
+
+  const maxLabel = document.createElement("span");
+  maxLabel.style.position = "absolute";
+  maxLabel.style.right = "0";
+  maxLabel.style.top = "12px";
+  maxLabel.style.fontSize = "10px";
+  maxLabel.textContent = maxZoom;
+  zoomScale.appendChild(maxLabel);
+
+  indicator.appendChild(zoomScale);
+
+  // Add controls hint
+  const controlsHint = document.createElement("div");
+  controlsHint.style.marginTop = "15px";
+  controlsHint.style.fontSize = "10px";
+  controlsHint.innerHTML = `
+    Mouse Wheel or +/- Keys<br>
+    Press Z to fit orbit
   `;
+  indicator.appendChild(controlsHint);
 
   document.body.appendChild(indicator);
   updateZoomIndicator(); // Initialize zoom level display
@@ -198,6 +250,15 @@ function updateZoomIndicator() {
   const zoomLevelElement = document.getElementById("zoom-level");
   if (zoomLevelElement) {
     zoomLevelElement.textContent = camera.position.z.toFixed(1);
+  }
+
+  // Update zoom marker position
+  const zoomMarker = document.getElementById("zoom-marker");
+  if (zoomMarker) {
+    // Calculate position percentage based on current zoom
+    const zoomRange = maxZoom - minZoom;
+    const zoomPercentage = ((camera.position.z - minZoom) / zoomRange) * 100;
+    zoomMarker.style.left = `${zoomPercentage}%`;
   }
 
   // Adjust camera's far clipping plane based on zoom level
